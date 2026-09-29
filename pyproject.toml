@@ -1,0 +1,26 @@
+[project]
+name = "calibration-check"
+version = "0.0.1"
+description = "Compare monitored data with MIKE 1D network results and export static HTML reports"
+readme = "README.md"
+authors = [
+    { name = "YiWangPhD", email = "yiwangphd@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "mikeio>=2.0.0",
+    "numpy>=2.0.0",
+    "pandas>=2.2.0",
+    "plotly>=6.0.0",
+    "res1d2excel",
+]
+
+[project.scripts]
+calibration-check = "calibration_check.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+res1d2excel = { path = "../res1d2excel", editable = true }
