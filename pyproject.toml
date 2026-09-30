@@ -1,6 +1,6 @@
 [project]
 name = "calibration-check"
-version = "0.0.1"
+version = "0.1.0"
 description = "Compare monitored data with MIKE 1D network results and export static HTML reports"
 readme = "README.md"
 authors = [
