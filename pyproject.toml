@@ -12,11 +12,13 @@ dependencies = [
     "numpy>=2.0.0",
     "pandas>=2.2.0",
     "plotly>=6.0.0",
+    "PySide6>=6.9.0",
     "res1d2excel",
 ]
 
 [project.scripts]
 calibration-check = "calibration_check.cli:main"
+calibration-check-gui = "calibration_check.gui:main"
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10.0"]

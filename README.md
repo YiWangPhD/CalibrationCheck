@@ -24,6 +24,7 @@ Runoff configuration and CSV monitoring sources are intentionally deferred.
 uv run calibration-check validate calibration.json
 uv run calibration-check run calibration.json
 uv run calibration-check convert-network-ini old_network.ini -o calibration.json
+uv run calibration-check-gui
 ```
 
 Legacy INI input can also be run directly:
@@ -31,6 +32,25 @@ Legacy INI input can also be run directly:
 ```powershell
 uv run calibration-check run old_network.ini
 ```
+
+## GUI Use
+
+Launch the desktop GUI with:
+
+```powershell
+uv run calibration-check-gui
+```
+
+The main window loads JSON or legacy INI configurations, validates and runs
+reports, shows process output, and offers an `Open Report` button after a
+successful run. The configuration editor uses tabs for project settings,
+network result files, DFS0 monitoring files, gauges, and report options.
+
+Gauge event tables are populated from the configured result files. Each result
+row can be enabled for that gauge, and `skip hours` / `truncate hours` are GUI
+helpers only: the JSON stores the resulting event `start` and `end` times.
+`Sync Events From Result Files` adds missing result-file events without
+overwriting existing event windows.
 
 ## JSON Structure
 
