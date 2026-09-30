@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import html
+import io
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -74,6 +77,8 @@ def _comparison_html(
     warnings = "".join(
         f"<li>{html.escape(message)}</li>" for message in comparison.warnings
     )
+    csv_filename = _csv_filename(comparison)
+    csv_content = _csv_content(comparison)
     return f"""
     <section class="comparison" data-gauge="{html.escape(comparison.gauge_alias)}"
              data-event="{html.escape(comparison.event_name)}">
@@ -82,6 +87,11 @@ def _comparison_html(
           <h2>{html.escape(comparison.signal_alias)}</h2>
           <p>{html.escape(comparison.gauge_alias)} · {html.escape(comparison.event_name)} · {html.escape(comparison.result_name)}</p>
         </div>
+        <button class="download-csv" type="button"
+                data-filename="{html.escape(csv_filename, quote=True)}"
+                data-csv="{html.escape(csv_content, quote=True)}">
+          Download CSV
+        </button>
       </div>
       <div class="content">
         <table><tbody>{rows}</tbody></table>
@@ -130,7 +140,11 @@ def _page_html(run: CalibrationRun, sections: str) -> str:
     main {{ max-width: 1500px; margin: 0 auto; padding: 20px; }}
     .comparison {{ margin-bottom: 16px; border: 1px solid #cbd5df;
       border-radius: 6px; background: #fff; }}
-    .section-heading {{ padding: 14px 16px 0; }}
+    .section-heading {{ display: flex; gap: 16px; align-items: flex-start;
+      justify-content: space-between; padding: 14px 16px 0; }}
+    .download-csv {{ flex: 0 0 auto; padding: 7px 11px; border: 1px solid #8aa0b5;
+      border-radius: 4px; color: #17212b; background: #f8fafc; cursor: pointer; }}
+    .download-csv:hover {{ background: #edf2f7; }}
     .filters {{ display: flex; gap: 16px; align-items: center; }}
     .content {{ padding: 8px 14px 14px; }}
     .plot {{ min-width: 0; }}
@@ -143,6 +157,7 @@ def _page_html(run: CalibrationRun, sections: str) -> str:
     .empty {{ padding: 18px; border: 1px solid #cbd5df; background: #fff; }}
     @media (max-width: 850px) {{
       header {{ align-items: stretch; flex-direction: column; gap: 10px; }}
+      .section-heading {{ flex-direction: column; }}
       .filters {{ align-items: stretch; flex-direction: column; gap: 8px; }}
       select {{ width: 100%; margin: 6px 0 0; }}
     }}
@@ -177,6 +192,18 @@ def _page_html(run: CalibrationRun, sections: str) -> str:
     }}
     gaugeFilter.addEventListener("change", applyFilters);
     eventFilter.addEventListener("change", applyFilters);
+    document.querySelectorAll(".download-csv").forEach(button => {{
+      button.addEventListener("click", () => {{
+        const blob = new Blob([button.dataset.csv || ""], {{ type: "text/csv;charset=utf-8" }});
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = button.dataset.filename || "calibration_data.csv";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+      }});
+    }});
   </script>
 </body>
 </html>"""
@@ -190,3 +217,70 @@ def _format_value(value: float) -> str:
     if pd.isna(value):
         return "—"
     return f"{value:,.4g}"
+
+
+def _csv_content(comparison: SignalComparison) -> str:
+    output = io.StringIO(newline="")
+    for label, value in [
+        ("gauge", comparison.gauge_alias),
+        ("event", comparison.event_name),
+        ("result", comparison.result_name),
+        ("signal", comparison.signal_alias),
+    ]:
+        output.write(f"# {label}: {_comment_value(value)}\r\n")
+    writer = csv.writer(output, lineterminator="\r\n")
+    writer.writerow(["timestamp", "observed", "simulated"])
+    data = _csv_frame(comparison)
+    for timestamp, row in data.iterrows():
+        writer.writerow([
+            timestamp.isoformat(),
+            _csv_number(row.get("observed")),
+            _csv_number(row.get("simulated")),
+        ])
+    return output.getvalue()
+
+
+def _csv_frame(comparison: SignalComparison) -> pd.DataFrame:
+    columns: list[pd.Series] = []
+    if comparison.observed is not None:
+        columns.append(_csv_series(comparison.observed, "observed"))
+    if comparison.simulated is not None:
+        columns.append(_csv_series(comparison.simulated, "simulated"))
+    if not columns:
+        return pd.DataFrame(columns=["observed", "simulated"])
+    data = pd.concat(columns, axis=1).sort_index()
+    return data.reindex(columns=["observed", "simulated"])
+
+
+def _csv_series(series: pd.Series, name: str) -> pd.Series:
+    clean = series.dropna().sort_index()
+    if clean.index.has_duplicates:
+        clean = clean.groupby(level=0).mean()
+    clean.name = name
+    return clean
+
+
+def _csv_number(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    return f"{float(value):.12g}"
+
+
+def _csv_filename(comparison: SignalComparison) -> str:
+    stem = "__".join([
+        _safe_filename_part(comparison.gauge_alias),
+        _safe_filename_part(comparison.signal_alias),
+        _safe_filename_part(comparison.event_name),
+        _safe_filename_part(comparison.result_name),
+    ])
+    return f"{stem}.csv"
+
+
+def _safe_filename_part(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())
+    cleaned = cleaned.strip("._-")
+    return cleaned or "data"
+
+
+def _comment_value(value: str) -> str:
+    return " ".join(str(value).split())

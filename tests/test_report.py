@@ -34,6 +34,10 @@ class ReportTests(unittest.TestCase):
         self.assertIn("plotly-graph-div", content)
         self.assertIn("gauge-filter", content)
         self.assertIn("event-filter", content)
+        self.assertIn("Download CSV", content)
+        self.assertIn("Gate_Chamber__Anything_User_Wants__event__event.csv", content)
+        self.assertIn("# gauge: Gate Chamber", content)
+        self.assertIn("timestamp,observed,simulated", content)
 
 
 if __name__ == "__main__":
