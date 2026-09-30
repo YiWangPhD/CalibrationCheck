@@ -430,8 +430,8 @@ def _parse_events(gauge: str, values: Any, errors: list[str]) -> list[Event]:
         names.add(name)
         start = _parse_timestamp(value.get("start"), f"{gauge}/{name}", errors)
         end = _parse_timestamp(value.get("end"), f"{gauge}/{name}", errors)
-        if start is None or end is None:
-            continue
+        start = start or pd.Timestamp.min
+        end = end or pd.Timestamp.max
         if start >= end:
             errors.append(f"Event '{gauge}/{name}' start must be before end.")
         events.append(Event(name, start, end))

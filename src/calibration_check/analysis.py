@@ -171,8 +171,8 @@ def _slice(series: pd.Series, start: pd.Timestamp, end: pd.Timestamp) -> pd.Seri
 
 
 def _align_series(observed: pd.Series, simulated: pd.Series) -> pd.DataFrame:
-    observed = observed.dropna().sort_index()
-    simulated = simulated.dropna().sort_index()
+    observed = _deduplicate_index(observed.dropna().sort_index())
+    simulated = _deduplicate_index(simulated.dropna().sort_index())
     if observed.empty or simulated.empty:
         return pd.DataFrame(columns=["observed", "simulated"])
     common_start = max(observed.index.min(), simulated.index.min())
@@ -192,6 +192,12 @@ def _align_series(observed: pd.Series, simulated: pd.Series) -> pd.DataFrame:
         "observed": observed_aligned,
         "simulated": simulated.reindex(target),
     }).dropna()
+
+
+def _deduplicate_index(series: pd.Series) -> pd.Series:
+    if not series.index.has_duplicates:
+        return series
+    return series.groupby(level=0).mean()
 
 
 def _integral(series: pd.Series) -> float:

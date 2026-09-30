@@ -127,6 +127,24 @@ class MonitoringAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["mean_error"], 1 / 3)
         self.assertIn("integral_difference", metrics)
 
+    def test_metrics_tolerate_duplicate_timestamps(self):
+        observed_index = pd.to_datetime([
+            "2024-01-01 00:00",
+            "2024-01-01 00:00",
+            "2024-01-01 01:00",
+        ])
+        simulated_index = pd.to_datetime([
+            "2024-01-01 00:00",
+            "2024-01-01 01:00",
+        ])
+        observed = pd.Series([1.0, 3.0, 4.0], index=observed_index)
+        simulated = pd.Series([2.0, 4.0], index=simulated_index)
+
+        metrics = calculate_metrics(observed, simulated)
+
+        self.assertEqual(metrics["paired_count"], 2.0)
+        self.assertEqual(metrics["rmse"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

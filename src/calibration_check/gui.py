@@ -83,6 +83,10 @@ def mark_green_button(button: QPushButton) -> QPushButton:
     return button
 
 
+def emit_changed(signal: Signal):
+    return lambda *_args: signal.emit()
+
+
 def empty_config() -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -591,8 +595,8 @@ class ProjectTab(QWidget):
         layout.addRow("project name", self.name_edit)
         layout.addRow("output folder", output_row)
         layout.addRow("result type", QLabel("network"))
-        self.name_edit.textChanged.connect(self.changed.emit)
-        self.output_edit.textChanged.connect(self.changed.emit)
+        self.name_edit.textChanged.connect(emit_changed(self.changed))
+        self.output_edit.textChanged.connect(emit_changed(self.changed))
 
     def pick_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select output folder", self.output_edit.text())
@@ -621,9 +625,9 @@ class OptionsTab(QWidget):
         layout.addRow("report title", self.title_edit)
         layout.addRow("report output file", self.output_file_edit)
         layout.addRow("self-contained HTML", self.self_contained)
-        self.title_edit.textChanged.connect(self.changed.emit)
-        self.output_file_edit.textChanged.connect(self.changed.emit)
-        self.self_contained.stateChanged.connect(self.changed.emit)
+        self.title_edit.textChanged.connect(emit_changed(self.changed))
+        self.output_file_edit.textChanged.connect(emit_changed(self.changed))
+        self.self_contained.stateChanged.connect(emit_changed(self.changed))
 
     def apply_to(self, config: dict[str, Any]) -> None:
         config["report"] = {
@@ -842,9 +846,9 @@ class MonitoringTab(QWidget):
         self.table = make_table(self.columns)
         self.table.itemSelectionChanged.connect(self._selection_changed)
         layout.addWidget(self.table)
-        self.use_pickle.stateChanged.connect(self.changed.emit)
-        self.update_pickle.stateChanged.connect(self.changed.emit)
-        self.pickle_path_edit.textChanged.connect(self.changed.emit)
+        self.use_pickle.stateChanged.connect(emit_changed(self.changed))
+        self.update_pickle.stateChanged.connect(emit_changed(self.changed))
+        self.pickle_path_edit.textChanged.connect(emit_changed(self.changed))
 
     def data(self) -> dict[str, dict[str, str]]:
         return {
@@ -1332,7 +1336,7 @@ class SignalDialog(QDialog):
             "Combined simulated",
             "Observed + combined",
         ])
-        self.mode_combo.currentTextChanged.connect(self._mode_changed)
+        self.mode_combo.currentTextChanged.connect(lambda *_args: self._mode_changed())
         form.addRow("alias", self.alias_edit)
         form.addRow("mode", self.mode_combo)
         layout.addLayout(form)

@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 from calibration_check.config import convert_network_ini, load_config
 from calibration_check.models import parse_config
 
@@ -42,6 +44,16 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.monitoring_pickle.use)
         self.assertTrue(config.monitoring_pickle.create_or_update)
         self.assertEqual(config.monitoring_pickle.path, Path.cwd() / "observed_sources.pkl")
+
+    def test_blank_event_bounds_mean_open_ended_event(self):
+        data = _config_dict()
+        data["gauges"][0]["events"][0]["start"] = ""
+        data["gauges"][0]["events"][0]["end"] = ""
+
+        config = parse_config(data, Path.cwd())
+
+        self.assertEqual(config.gauges[0].events[0].start, pd.Timestamp.min)
+        self.assertEqual(config.gauges[0].events[0].end, pd.Timestamp.max)
 
     def test_legacy_network_ini_conversion_assumes_link_discharges(self):
         content = """
