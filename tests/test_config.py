@@ -30,6 +30,19 @@ class ConfigTests(unittest.TestCase):
                 "Gate1",
             )
 
+    def test_json_supports_monitoring_pickle_options(self):
+        data = _config_dict()
+        data["monitoring_pickle"] = {
+            "use": True,
+            "path": "observed_sources.pkl",
+            "create_or_update": True,
+        }
+        config = parse_config(data, Path.cwd())
+
+        self.assertTrue(config.monitoring_pickle.use)
+        self.assertTrue(config.monitoring_pickle.create_or_update)
+        self.assertEqual(config.monitoring_pickle.path, Path.cwd() / "observed_sources.pkl")
+
     def test_legacy_network_ini_conversion_assumes_link_discharges(self):
         content = """
 [CalibrationGauges]

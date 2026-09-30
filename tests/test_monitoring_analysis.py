@@ -1,9 +1,11 @@
+import tempfile
 import unittest
 from pathlib import Path
 
 import pandas as pd
 
 from calibration_check.analysis import analyze, calculate_metrics
+from calibration_check.models import MonitoringPickleOptions
 from calibration_check.monitoring import MonitoringRepository
 from calibration_check.models import parse_config
 
@@ -51,6 +53,69 @@ class MonitoringAnalysisTests(unittest.TestCase):
 
         self.assertEqual(len(run.comparisons), 1)
         self.assertIn("rmse", run.comparisons[0].metrics)
+
+    def test_monitoring_pickle_can_be_created_and_used(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source_path = root / "gates.dfs0"
+            source_path.write_bytes(b"dfs0 bytes")
+            data = _config_dict()
+            data["monitoring_sources"] = {
+                "gates": {"format": "dfs0", "path": str(source_path)}
+            }
+            config = parse_config(data, root)
+            pickle_path = root / "observed_sources.pkl"
+            index = pd.date_range("2024-01-01", periods=3, freq="h")
+            observed = pd.DataFrame(
+                {"Gate Position": [1.0, 2.0, 3.0]},
+                index=index,
+            )
+
+            MonitoringRepository(
+                config,
+                {"dfs0": lambda source: observed},
+                MonitoringPickleOptions(
+                    create_or_update=True,
+                    path=pickle_path,
+                ),
+            )
+            repository = MonitoringRepository(
+                config,
+                {"dfs0": lambda source: self.fail("DFS0 loader should not run")},
+                MonitoringPickleOptions(use=True, path=pickle_path),
+            )
+
+            series = repository.get_series(config.gauges[0].signals[0].observed)
+
+        self.assertEqual(series.tolist(), [1.0, 2.0, 3.0])
+
+    def test_missing_pickle_column_becomes_analysis_warning(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source_path = root / "gates.dfs0"
+            source_path.write_bytes(b"dfs0 bytes")
+            data = _config_dict()
+            data["monitoring_sources"] = {
+                "gates": {"format": "dfs0", "path": str(source_path)}
+            }
+            config = parse_config(data, root)
+            pickle_path = root / "observed_sources.pkl"
+            index = pd.date_range("2024-01-01", periods=3, freq="h")
+            observed = pd.DataFrame({"Other Column": [1.0, 2.0, 3.0]}, index=index)
+            MonitoringRepository(
+                config,
+                {"dfs0": lambda source: observed},
+                MonitoringPickleOptions(create_or_update=True, path=pickle_path),
+            )
+            repository = MonitoringRepository(
+                config,
+                pickle_options=MonitoringPickleOptions(use=True, path=pickle_path),
+            )
+            model = FakeModelData(pd.Series([1.0, 2.0, 3.0], index=index))
+
+            run = analyze(config, repository, model)
+
+        self.assertIn("Monitoring column 'Gate Position' was not found", run.warnings[0])
 
     def test_metrics_do_not_require_signal_type(self):
         index = pd.date_range("2024-01-01", periods=3, freq="h")

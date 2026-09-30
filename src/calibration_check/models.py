@@ -50,6 +50,13 @@ class MonitoringSource:
 
 
 @dataclass(frozen=True)
+class MonitoringPickleOptions:
+    use: bool = False
+    path: Path | None = None
+    create_or_update: bool = False
+
+
+@dataclass(frozen=True)
 class ObservedReference:
     source: str
     column: str
@@ -114,6 +121,9 @@ class CalibrationConfig:
     results: tuple[ResultDefinition, ...]
     monitoring_sources: dict[str, MonitoringSource]
     gauges: tuple[Gauge, ...]
+    monitoring_pickle: MonitoringPickleOptions = field(
+        default_factory=MonitoringPickleOptions
+    )
     report: ReportOptions = field(default_factory=ReportOptions)
 
     def to_dict(self) -> dict[str, Any]:
@@ -134,6 +144,14 @@ class CalibrationConfig:
             "monitoring_sources": {
                 alias: {"format": source.format, "path": str(source.path)}
                 for alias, source in self.monitoring_sources.items()
+            },
+            "monitoring_pickle": {
+                "use": self.monitoring_pickle.use,
+                "path": (
+                    str(self.monitoring_pickle.path)
+                    if self.monitoring_pickle.path is not None else ""
+                ),
+                "create_or_update": self.monitoring_pickle.create_or_update,
             },
             "gauges": [{
                 "alias": gauge.alias,
@@ -198,6 +216,29 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> CalibrationConfig:
             str(alias), source_format, _resolve_path(path, base_dir)
         )
 
+    pickle_data = data.get("monitoring_pickle") or {}
+    if not isinstance(pickle_data, dict):
+        errors.append("monitoring_pickle must be an object.")
+        pickle_data = {}
+    pickle_path_value = pickle_data.get("path")
+    monitoring_pickle = MonitoringPickleOptions(
+        use=_parse_bool(pickle_data.get("use", False)),
+        path=(
+            _resolve_path(pickle_path_value, base_dir)
+            if pickle_path_value not in (None, "") else None
+        ),
+        create_or_update=_parse_bool(
+            pickle_data.get("create_or_update", False)
+        ),
+    )
+    if (monitoring_pickle.use or monitoring_pickle.create_or_update) and (
+        monitoring_pickle.path is None
+    ):
+        errors.append(
+            "monitoring_pickle.path is required when using or creating a "
+            "monitoring pickle."
+        )
+
     results: list[ResultDefinition] = []
     result_names: set[str] = set()
     for index, value in enumerate(data.get("results") or [], start=1):
@@ -248,6 +289,7 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> CalibrationConfig:
         results=tuple(results),
         monitoring_sources=sources,
         gauges=tuple(gauges),
+        monitoring_pickle=monitoring_pickle,
         report=report,
     )
 

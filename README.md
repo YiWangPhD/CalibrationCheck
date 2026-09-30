@@ -23,6 +23,8 @@ Runoff configuration and CSV monitoring sources are intentionally deferred.
 ```powershell
 uv run calibration-check validate calibration.json
 uv run calibration-check run calibration.json
+uv run calibration-check run calibration.json --create-monitoring-pickle observed_sources.pkl
+uv run calibration-check run calibration.json --use-monitoring-pickle observed_sources.pkl
 uv run calibration-check convert-network-ini old_network.ini -o calibration.json
 uv run calibration-check-gui
 ```
@@ -68,6 +70,11 @@ overwriting existing event windows.
   "monitoring_sources": {
     "station_data": {"format": "dfs0", "path": "monitoring/station.dfs0"}
   },
+  "monitoring_pickle": {
+    "use": false,
+    "path": "observed_sources.pkl",
+    "create_or_update": false
+  },
   "gauges": [{
     "alias": "Pump Station 1",
     "signals": [{
@@ -95,6 +102,12 @@ overwriting existing event windows.
 
 Paths in JSON are resolved relative to the JSON file. Legacy INI paths retain
 the old behavior of resolving input and result filenames under `workfolder`.
+
+`monitoring_pickle` can store raw monitoring source DataFrames for repeated
+runs. Set `create_or_update` to `true` to read configured DFS0 files and write
+the pickle with checksum metadata. Set `use` to `true` to read observed data
+from the pickle instead of DFS0. Pickle files should only be loaded when they
+were created locally or come from a trusted source.
 
 For legacy INI conversion, discharge and overflow identifiers are currently
 treated as links. Numeric level identifiers are interpreted as link chainages;

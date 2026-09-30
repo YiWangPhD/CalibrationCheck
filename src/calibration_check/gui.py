@@ -90,6 +90,11 @@ def empty_config() -> dict[str, Any]:
         "result_type": "network",
         "results": [],
         "monitoring_sources": {},
+        "monitoring_pickle": {
+            "use": False,
+            "path": "",
+            "create_or_update": False,
+        },
         "gauges": [],
         "report": {
             "title": "Calibration Check",
@@ -107,6 +112,10 @@ def normalize_config(data: dict[str, Any] | None) -> dict[str, Any]:
     config["result_type"] = "network"
     config["project"] = {**empty_config()["project"], **(config.get("project") or {})}
     config["report"] = {**empty_config()["report"], **(config.get("report") or {})}
+    config["monitoring_pickle"] = {
+        **empty_config()["monitoring_pickle"],
+        **(config.get("monitoring_pickle") or {}),
+    }
     config["results"] = list(config.get("results") or [])
     config["monitoring_sources"] = dict(config.get("monitoring_sources") or {})
     config["gauges"] = list(config.get("gauges") or [])
@@ -472,7 +481,10 @@ class ConfigEditorWindow(QWidget):
         self.tabs.addTab(results, "res1d Files")
         self.tabs_by_name["results"] = results
 
-        monitoring = MonitoringTab(self.config.get("monitoring_sources", {}))
+        monitoring = MonitoringTab(
+            self.config.get("monitoring_sources", {}),
+            self.config.get("monitoring_pickle", {}),
+        )
         monitoring.changed.connect(self._tab_changed)
         self.tabs.addTab(monitoring, "Monitoring")
         self.tabs_by_name["monitoring"] = monitoring
@@ -549,6 +561,7 @@ class ConfigEditorWindow(QWidget):
         monitoring = self.tabs_by_name.get("monitoring")
         if isinstance(monitoring, MonitoringTab):
             self.config["monitoring_sources"] = monitoring.data()
+            self.config["monitoring_pickle"] = monitoring.pickle_options()
         gauges = self.tabs_by_name.get("gauges")
         if isinstance(gauges, GaugesTab):
             self.config["gauges"] = gauges.data()
@@ -765,13 +778,18 @@ class ResultsTab(QWidget):
 class MonitoringTab(QWidget):
     changed = Signal()
 
-    def __init__(self, sources: dict[str, Any]) -> None:
+    def __init__(
+            self,
+            sources: dict[str, Any],
+            pickle_options: dict[str, Any] | None = None,
+            ) -> None:
         super().__init__()
         self.columns = ["alias", "format", "path"]
         self.rows = [
             {"alias": alias, "format": value.get("format", "dfs0"), "path": value.get("path", "")}
             for alias, value in sources.items()
         ]
+        self._pickle_options = pickle_options or {}
         self.selected_row = -1
         self.inputs: dict[str, QLineEdit] = {}
         self._updating = False
@@ -780,6 +798,25 @@ class MonitoringTab(QWidget):
 
     def _build_layout(self) -> None:
         layout = QVBoxLayout(self)
+        pickle_form = QFormLayout()
+        self.use_pickle = QCheckBox()
+        self.use_pickle.setChecked(bool(self._pickle_options.get("use", False)))
+        self.update_pickle = QCheckBox()
+        self.update_pickle.setChecked(
+            bool(self._pickle_options.get("create_or_update", False))
+        )
+        self.pickle_path_edit = QLineEdit(
+            str(self._pickle_options.get("path") or "")
+        )
+        browse_pickle = mark_green_button(QPushButton("Browse"))
+        browse_pickle.clicked.connect(self.pick_pickle)
+        pickle_path_row = QHBoxLayout()
+        pickle_path_row.addWidget(self.pickle_path_edit)
+        pickle_path_row.addWidget(browse_pickle)
+        pickle_form.addRow("use monitoring pickle", self.use_pickle)
+        pickle_form.addRow("create/update monitoring pickle", self.update_pickle)
+        pickle_form.addRow("monitoring pickle path", pickle_path_row)
+        layout.addLayout(pickle_form)
         form = QFormLayout()
         for column in self.columns:
             edit = QLineEdit()
@@ -805,6 +842,9 @@ class MonitoringTab(QWidget):
         self.table = make_table(self.columns)
         self.table.itemSelectionChanged.connect(self._selection_changed)
         layout.addWidget(self.table)
+        self.use_pickle.stateChanged.connect(self.changed.emit)
+        self.update_pickle.stateChanged.connect(self.changed.emit)
+        self.pickle_path_edit.textChanged.connect(self.changed.emit)
 
     def data(self) -> dict[str, dict[str, str]]:
         return {
@@ -814,6 +854,13 @@ class MonitoringTab(QWidget):
             }
             for row in self.rows
             if row.get("alias")
+        }
+
+    def pickle_options(self) -> dict[str, Any]:
+        return {
+            "use": self.use_pickle.isChecked(),
+            "path": self.pickle_path_edit.text(),
+            "create_or_update": self.update_pickle.isChecked(),
         }
 
     def add_row(self) -> None:
@@ -857,6 +904,24 @@ class MonitoringTab(QWidget):
             self.refresh_table()
             self._fill_form(row)
             self.changed.emit()
+
+    def pick_pickle(self) -> None:
+        if self.use_pickle.isChecked() and not self.update_pickle.isChecked():
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Select monitoring pickle",
+                str(Path.cwd()),
+                "Pickle files (*.pkl *.pickle);;All files (*.*)",
+            )
+        else:
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Select monitoring pickle",
+                str(Path.cwd() / "observed_sources.pkl"),
+                "Pickle files (*.pkl *.pickle);;All files (*.*)",
+            )
+        if path:
+            self.pickle_path_edit.setText(path)
 
     def refresh_table(self) -> None:
         self._updating = True
